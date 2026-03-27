@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>RPG Battle+ </title>
+  <style>
+    body {
+      font-family: Arial;
+      background: linear-gradient(#111, #222);
+      color: #eee;
+      text-align: center;
+    }
+    button {
+      margin: 6px;
+      padding: 12px;
+      font-size: 16px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover { opacity: 0.8; }
+    #log {
+      margin-top: 20px;
+      height: 220px;
+      overflow-y: auto;
+      border: 1px solid #444;
+      padding: 10px;
+      background: #000;
+    }
+    .crit { color: gold; }
+    .miss { color: red; }
+  </style>
+</head>
+<body>
+
+<h1>⚔️ RPG Battle+</h1>
+
+<div id="stats"></div>
+
+<div>
+  <button onclick="playerTurn('attack')">⚔️ Attack</button>
+  <button onclick="playerTurn('defend')">🛡️ Defend</button>
+  <button onclick="playerTurn('dodge')">💨 Dodge</button>
+  <button onclick="playerTurn('special')">💥 Special</button>
+</div>
+
+<div id="log"></div>
+<br>
+<button onclick="location.reload()">🔄 Restart</button>
+
+<script>
+function rand(min,max){return Math.floor(Math.random()*(max-min+1))+min}
+
+// RANDOM STATS EACH LOAD
+let player = {
+  hp: 100,
+  maxHp: 100,
+  energy: 50,
+  speed: rand(1,3),
+  power: rand(1,3),
+  armor: rand(0,2),
+  level: 1,
+  xp: 0
+};
+
+let enemy = {
+  hp: 100,
+  energy: 50,
+  speed: rand(1,3),
+  power: rand(1,3),
+  armor: rand(0,2)
+};
+
+function log(msg){
+  let l=document.getElementById("log");
+  l.innerHTML+=msg+"<br>";
+  l.scrollTop=l.scrollHeight;
+}
+
+function update(){
+  document.getElementById("stats").innerHTML=`
+  <h3>Player (Lv ${player.level})</h3>
+  HP: ${player.hp}/${player.maxHp} | Energy: ${player.energy}<br>
+  Speed:${player.speed} Power:${player.power} Armor:${player.armor}
+  <h3>Enemy</h3>
+  HP:${enemy.hp} | Energy:${enemy.energy}
+  `;
+}
+
+// DAMAGE SYSTEM
+function calcDamage(attacker, defender){
+  let base = attacker.power * rand(6,12);
+  let crit = Math.random() < (attacker.speed * 0.1);
+  let miss = Math.random() < 0.1;
+
+  if(miss) return {dmg:0, type:"miss"};
+
+  if(crit) base *= 2;
+
+  base -= defender.armor * 2;
+  base = Math.max(0, base);
+
+  return {dmg:base, type: crit ? "crit" : "hit"};
+}
+
+// PLAYER TURN
+function playerTurn(action){
+  if(player.hp<=0) return;
+
+  // speed decides who goes first
+  if(player.speed >= enemy.speed){
+    doAction(player, enemy, action, true);
+    if(enemy.hp>0) enemyTurn();
+  } else {
+    enemyTurn();
+    if(player.hp>0) doAction(player, enemy, action, true);
+  }
+
+  update();
+  checkEnd();
+}
+
+// ACTION LOGIC
+function doAction(attacker, defender, action, isPlayer=false){
+  if(action==="attack"){
+    if(attacker.energy<10) return log("No energy!");
+    attacker.energy-=10;
+
+    let result = calcDamage(attacker, defender);
+    defender.hp -= result.dmg;
+
+    if(result.type==="miss") log(`<span class="miss">Miss!</span>`);
+    else if(result.type==="crit") log(`<span class="crit">CRIT! ${result.dmg}</span>`);
+    else log(`${isPlayer?"You":"Enemy"} hit for ${result.dmg}`);
+  }
+
+  if(action==="defend"){
+    if(attacker.energy<5) return log("No energy!");
+    attacker.energy-=5;
+    attacker.armor+=2;
+    log((isPlayer?"You":"Enemy")+" defend (+armor)");
+    setTimeout(()=>attacker.armor-=2,500);
+  }
+
+  if(action==="dodge"){
+    let success = rand(1,3)<=attacker.speed;
+    if(success){
+      attacker.energy+=10;
+      log((isPlayer?"You":"Enemy")+" dodged & gained energy!");
+    } else {
+      log("Dodge failed!");
+    }
+  }
+
+  if(action==="special"){
+    if(attacker.energy<20) return log("Not enough energy!");
+    attacker.energy-=20;
+    let dmg = attacker.power * 15;
+    defender.hp -= dmg;
+    log((isPlayer?"You":"Enemy")+" used SPECIAL for "+dmg);
+  }
+}
+
+// ENEMY AI
+function enemyTurn(){
+  let choice;
+
+  if(enemy.hp < 30 && enemy.energy >=5) choice="defend";
+  else if(enemy.energy >=20 && Math.random()<0.3) choice="special";
+  else if(enemy.energy >=10) choice="attack";
+  else choice="dodge";
+
+  doAction(enemy, player, choice, false);
+}
+
+// LEVELING
+function gainXP(){
+  player.xp += 20;
+  if(player.xp >= 50){
+    player.level++;
+    player.xp=0;
+    player.maxHp+=20;
+    player.hp=player.maxHp;
+    player.power++;
+    player.speed++;
+    log("🔥 LEVEL UP!");
+  }
+}
+
+// RANDOM EVENTS
+setInterval(()=>{
+  if(Math.random()<0.2){
+    let heal = rand(5,15);
+    player.hp = Math.min(player.maxHp, player.hp+heal);
+    log("✨ You feel energized +" + heal);
+    update();
+  }
+},5000);
+
+// END GAME
+function checkEnd(){
+  if(enemy.hp<=0){
+    log("<b>You Win!</b>");
+    gainXP();
+    disable();
+  }
+  if(player.hp<=0){
+    log("<b>You Lose!</b>");
+    disable();
+  }
+}
+
+function disable(){
+  document.querySelectorAll("button").forEach(b=>b.disabled=true);
+}
+
+// START
+update();
+log("⚔️ Battle begins!");
+</script>
+
+</body>
+</html>
